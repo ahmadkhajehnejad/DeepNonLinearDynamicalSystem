@@ -45,6 +45,7 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             mu_t_t[t] = mu_t_t_1[t] + np.matmul(K,w_all[i][t,:].reshape([-1,1]) - np.matmul(C,mu_t_t_1[t]) - d)
             Sig_t_t[t] = np.matmul(np.eye(K.shape[0]) - np.matmul(K,C), Sig_t_t_1[t])
                 
+            
         for t in reversed(range(T)):
             if t == (T - 1):
                 mu_t_T[t] = mu_t_t[t]
@@ -123,10 +124,17 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
     tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) - mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
     tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
     
-    A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    tmp_2_ch = np.linalg.inv(np.linalg.cholesky(tmp_2))
+    tmp_2_inv = np.dot(tmp_2_ch.T,tmp_2_ch)
+    
+    
+    #A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    A = np.matmul(tmp_1, tmp_2_inv)
+    
+    
     
     ############################ b
-    b = mean_Ezt - mean_Ezt_1 - mean_Hvt_1
+    b = mean_Ezt - np.matmul(A,mean_Ezt_1) - mean_Hvt_1
     
     ############################ Q
     tmp = np.zeros([z_dim,z_dim])
@@ -215,7 +223,7 @@ for i in range(1):
     EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
     
     
-'''
+
 print(mu_0.reshape([-1]))
 print(kf.initial_state_mean)
 print()
@@ -224,14 +232,22 @@ print(Sig_0)
 print(kf.initial_state_covariance)
 print()
 
-print(A)
-print(kf.transition_matrices)
+#print(A)
+#print(kf.transition_matrices)
+print(A - kf.transition_matrices)
 print()
 
-print(b.reshape([-1]))
-print(kf.transition_offsets)
+#print(b.reshape([-1]))
+#print(kf.transition_offsets)
+print(b.reshape([-1]) - kf.transition_offsets)
 print()
-'''
+
+#print(Q)
+#print(kf.transition_covariance)
+print(Q - kf.transition_covariance)
+print()
+
+
 
 
 def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
@@ -290,7 +306,7 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     return L
 
 
-
+'''
 L1 = log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
 L2 = log_likelihood(w_all,\
                     kf.transition_matrices, kf.transition_offsets.reshape([-1,1]), H,v_all,\
@@ -300,4 +316,4 @@ L2 = log_likelihood(w_all,\
 
 print(L1)
 print(L2)
-        
+'''     
