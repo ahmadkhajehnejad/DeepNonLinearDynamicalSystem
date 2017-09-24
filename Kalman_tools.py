@@ -15,6 +15,8 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     Ezt = [None] * M
     EztztT = [None] * M
     Ezt_1ztT = [None] * M
+    Sigt = [None] * M
+    Lt = [None] * M
     
     z_dim = mu_0.shape[0]
     for i in range(M):
@@ -22,6 +24,8 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
         Ezt[i] = np.zeros([z_dim,T])
         EztztT[i] = [None] * T
         Ezt_1ztT[i] = [None] * T
+        Sigt[i] = [None] * T
+        Lt[i] = [None] * T
             
         
         mu_t_t = [None] * T
@@ -51,7 +55,7 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             '''
             K = np.matmul(\
                           np.matmul(Sig_t_t_1[t], C.T) , \
-                          np.linalg.pinv(\
+                          np.linalg.inv(\
                                         np.matmul(\
                                                   C,
                                                   np.matmul(Sig_t_t_1[t], C.T)\
@@ -70,7 +74,7 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             else:
                 
                 #L = np.linalg.solve(Sig_t_t_1[t+1].T, np.matmul(Sig_t_t[t], A.T).T).T
-                L = np.matmul(Sig_t_t[t], np.matmul(A.T, np.linalg.pinv(Sig_t_t_1[t+1])))
+                L = np.matmul(Sig_t_t[t], np.matmul(A.T, np.linalg.inv(Sig_t_t_1[t+1])))
                 mu_t_T[t] = mu_t_t[t] + np.matmul(L,mu_t_T[t+1] - mu_t_t_1[t+1])
                 Sig_t_T[t] = Sig_t_t[t] + np.matmul(\
                                                     L,\
@@ -85,10 +89,13 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                 Ezt_1ztT[i][t+1] = np.matmul(mu_t_t[t], mu_t_T[t+1].T) +\
                                  np.matmul(L,EztztT[i][t+1]) -\
                                  np.matmul(L,np.matmul(mu_t_t_1[t+1], mu_t_T[t+1].T))
+            Sigt[i][t] = Sig_t_T[t]
+            if t < (T-1):
+                Lt[i][t] = L
     
-    return [Ezt, EztztT, Ezt_1ztT]
+    return [Ezt, EztztT, Ezt_1ztT, Sigt, Lt]
 
-def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
+def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     
     w_dim = w_all[0].shape[1]
     v_dim = v_all[0].shape[1]
@@ -139,12 +146,15 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
     mean_Ezt_1zt_1T = mean_Ezt_1zt_1T / ((T-1)*M)
     mean_Hvt_1 = mean_Hvt_1 / ((T-1)*M)
     mean_Hvt_1Ezt_1T = mean_Hvt_1Ezt_1T / ((T-1)*M)
-        
-    tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) - mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
-    tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
     
-    #A = np.matmul(tmp_1, np.linalg.inv(tmp_2))
-    A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    #tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) #- mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
+    #tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
+    tmp_1 = mean_Ezt_1ztT.T - np.matmul(b_old, mean_Ezt_1.T) - np.matmul(mean_Hvt_1, mean_Ezt_1.T)
+    tmp_2 = mean_Ezt_1zt_1T
+    
+    
+    A = np.matmul(tmp_1, np.linalg.inv(tmp_2))
+    #A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
     #A = np.linalg.solve(tmp_2.T,tmp_1.T).T
     
     
@@ -153,15 +163,24 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
     b = mean_Ezt - np.matmul(A,mean_Ezt_1) - mean_Hvt_1
     
     ############################ Q
+    
     tmp = np.zeros([z_dim,z_dim])
     for i in range(M):
         for t in range(1,T):
+            tmp_0 = Ezt[i][:,t] - np.matmul(A,Ezt[i][:,t-1].reshape([-1,1])) - np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))
+            tmp_1 = np.matmul(A,np.matmul(Sigt[i][t-1], A.T)) + Sigt[i][t]
+            tmp_2 = - np.matmul(Sigt[i][t], np.matmul(Lt[i][t-1],A.T)) - np.matmul(A,np.matmul(Lt[i][t-1],Sigt[i][t]))
+            tmp = np.matmul(tmp_0, tmp_0.T) + tmp_1 + tmp_2
+            
+            '''
             tmp = tmp + EztztT[i][t] - 2*np.matmul(Ezt_1ztT[i][t].T,A.T) \
             - 2*np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b,Ezt[i][:,t].reshape([1,-1])) \
             + np.matmul(A, np.matmul(EztztT[i][t-1],A.T)) \
             + 2*np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b,np.matmul(Ezt[i][:,t-1].reshape([1,-1]),A.T)) \
             + np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b, (np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b).T)
+            '''
     Q = tmp / ((T-1)*M)
+    
     
     ############################ C
     mean_wt = np.zeros([w_dim,1])
@@ -209,8 +228,8 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
 
 
 def EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
-    [Ezt, EztztT, Ezt_1ztT] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-    [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all)
+    [Ezt, EztztT, Ezt_1ztT, Sigt, Lt] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
+    [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b, d)
     return [A,b,H,C,d,Q,R,mu_0,Sig_0]
 
 T = 5
@@ -236,11 +255,11 @@ kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
                   observation_matrices = C,
                   observation_offsets = d.reshape([-1]),
                   observation_covariance = R)
-kf = kf.em(w_all[0],n_iter=100,em_vars=['initial_state_mean', 'initial_state_covariance',\
+kf = kf.em(w_all[0],n_iter=1,em_vars=['initial_state_mean', 'initial_state_covariance',\
            'transition_matrices', 'transition_offsets', 'transition_covariance', \
            'observation_matrices', 'observation_offsets', 'observation_covariance'])
 
-for i in range(100):
+for i in range(1):
     [A,b,H,C,d,Q,R,mu_0,Sig_0] = \
     EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
     
