@@ -2,6 +2,11 @@ import numpy as np
 from pykalman import KalmanFilter
 from scipy.stats import multivariate_normal
 
+def ch_inv(X):
+    X_ch = np.linalg.inv(np.linalg.cholesky(X))
+    X_inv = np.dot(X_ch.T,X_ch)
+    return X_inv
+
 def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     
     M = len(w_all)
@@ -33,6 +38,17 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             else:
                 mu_t_t_1[t] = mu_0
                 Sig_t_t_1[t] = Sig_0
+                
+            ''' 
+            K = np.linalg.solve(\
+                                (np.matmul(\
+                                           C,\
+                                           np.matmul(Sig_t_t_1[t], C.T)\
+                                           )+R\
+                                ).T\
+                                ,np.matmul(Sig_t_t_1[t], C.T).T\
+                               ).T
+            '''
             K = np.matmul(\
                           np.matmul(Sig_t_t_1[t], C.T) , \
                           np.linalg.pinv(\
@@ -42,6 +58,7 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                                                  )+R\
                                        )\
                          )
+            
             mu_t_t[t] = mu_t_t_1[t] + np.matmul(K,w_all[i][t,:].reshape([-1,1]) - np.matmul(C,mu_t_t_1[t]) - d)
             Sig_t_t[t] = np.matmul(np.eye(K.shape[0]) - np.matmul(K,C), Sig_t_t_1[t])
                 
@@ -51,6 +68,8 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                 mu_t_T[t] = mu_t_t[t]
                 Sig_t_T[t] = Sig_t_t[t]
             else:
+                
+                #L = np.linalg.solve(Sig_t_t_1[t+1].T, np.matmul(Sig_t_t[t], A.T).T).T
                 L = np.matmul(Sig_t_t[t], np.matmul(A.T, np.linalg.pinv(Sig_t_t_1[t+1])))
                 mu_t_T[t] = mu_t_t[t] + np.matmul(L,mu_t_T[t+1] - mu_t_t_1[t+1])
                 Sig_t_T[t] = Sig_t_t[t] + np.matmul(\
@@ -124,12 +143,9 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
     tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) - mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
     tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
     
-    tmp_2_ch = np.linalg.inv(np.linalg.cholesky(tmp_2))
-    tmp_2_inv = np.dot(tmp_2_ch.T,tmp_2_ch)
-    
-    
-    #A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
-    A = np.matmul(tmp_1, tmp_2_inv)
+    #A = np.matmul(tmp_1, np.linalg.inv(tmp_2))
+    A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    #A = np.linalg.solve(tmp_2.T,tmp_1.T).T
     
     
     
@@ -151,18 +167,24 @@ def maximization(Ezt, EztztT, Ezt_1ztT,w_all, v_all):
     mean_wt = np.zeros([w_dim,1])
     mean_wtEztT = np.zeros([w_dim, z_dim])
     mean_Ezt = np.zeros([z_dim, 1])
+    mean_EztztT = np.zeros([z_dim,z_dim])
     for i in range(M):
         for t in range(T):
             mean_wt = mean_wt + w_all[i][t,:].reshape([-1,1])
             mean_wtEztT = mean_wtEztT + np.matmul(w_all[i][t,:].reshape([-1,1]),Ezt[i][:,t].reshape([1,-1]))
             mean_Ezt = mean_Ezt + Ezt[i][:,t].reshape([-1,1])
+            mean_EztztT = mean_EztztT + np.matmul(Ezt[i][:,t].reshape([-1,1]) , Ezt[i][:,t].reshape([1,-1]))
     mean_wt = mean_wt / (T*M)
     mean_wtEztT = mean_wtEztT / (T*M)
     mean_Ezt = mean_Ezt / (T*M)
+    mean_EztztT = mean_EztztT / (T*M)
     
     tmp_1 = mean_wtEztT - np.matmul(mean_wt, mean_Ezt.T)
-    tmp_2 = np.linalg.pinv(np.matmul(mean_Ezt, mean_Ezt.T))
-    C = np.matmul(tmp_1, tmp_2.T)
+    tmp_2 = mean_EztztT - np.matmul(mean_Ezt, mean_Ezt.T)
+    
+    #C = np.matmul(tmp_1, np.linalg.inv(tmp_2))
+    C = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    #C = np.linalg.solve(tmp_2.T,tmp_1.T).T
     ############################ d
     
     d = mean_wt - np.matmul(C,mean_Ezt)
@@ -214,39 +236,54 @@ kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
                   observation_matrices = C,
                   observation_offsets = d.reshape([-1]),
                   observation_covariance = R)
-kf = kf.em(w_all[0],n_iter=1,em_vars=['initial_state_mean', 'initial_state_covariance',\
+kf = kf.em(w_all[0],n_iter=100,em_vars=['initial_state_mean', 'initial_state_covariance',\
            'transition_matrices', 'transition_offsets', 'transition_covariance', \
            'observation_matrices', 'observation_offsets', 'observation_covariance'])
 
-for i in range(1):
+for i in range(100):
     [A,b,H,C,d,Q,R,mu_0,Sig_0] = \
     EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
     
     
 
-print(mu_0.reshape([-1]))
-print(kf.initial_state_mean)
+#print(mu_0.reshape([-1]))
+#print(kf.initial_state_mean)
+print(np.max(np.abs(mu_0.reshape([-1]) - kf.initial_state_mean)))
 print()
 
-print(Sig_0)
-print(kf.initial_state_covariance)
+#print(Sig_0)
+#print(kf.initial_state_covariance)
+print(np.max(np.abs(Sig_0 - kf.initial_state_covariance)))
 print()
 
 #print(A)
 #print(kf.transition_matrices)
-print(A - kf.transition_matrices)
+print(np.max(np.abs(A - kf.transition_matrices)))
 print()
 
 #print(b.reshape([-1]))
 #print(kf.transition_offsets)
-print(b.reshape([-1]) - kf.transition_offsets)
+print(np.max(np.abs(b.reshape([-1]) - kf.transition_offsets)))
 print()
 
 #print(Q)
 #print(kf.transition_covariance)
-print(Q - kf.transition_covariance)
+print(np.max(np.abs(Q - kf.transition_covariance)))
 print()
 
+print("----------------")
+print()
+
+#print(C)
+#print(kf.observation_matrices)
+print(np.max(np.abs(C - kf.observation_matrices)))
+print()
+
+
+#print(d.reshape([-1]).)
+#print(kf.observation_offsets)
+print(np.max(np.abs(d.reshape([-1]) - kf.observation_offsets)))
+print()
 
 
 
@@ -281,6 +318,16 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             else:
                 mu_t_t_1[t] = mu_0
                 Sig_t_t_1[t] = Sig_0
+            '''
+            K = np.linalg.solve(\
+                                (np.matmul(\
+                                           C,\
+                                           np.matmul(Sig_t_t_1[t], C.T)\
+                                           )+R\
+                                ).T\
+                                ,np.matmul(Sig_t_t_1[t], C.T).T\
+                               ).T
+            '''
             K = np.matmul(\
                           np.matmul(Sig_t_t_1[t], C.T) , \
                           np.linalg.pinv(\
@@ -290,6 +337,7 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                                                  )+R\
                                        )\
                          )
+            
             mu_t_t[t] = mu_t_t_1[t] + np.matmul(K,w_all[i][t,:].reshape([-1,1]) - np.matmul(C,mu_t_t_1[t]) - d)
             Sig_t_t[t] = np.matmul(np.eye(K.shape[0]) - np.matmul(K,C), Sig_t_t_1[t])
             mu_xt_x1tot_1 = np.matmul(C,mu_t_t_1[t]) + d
@@ -306,7 +354,7 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     return L
 
 
-'''
+
 L1 = log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
 L2 = log_likelihood(w_all,\
                     kf.transition_matrices, kf.transition_offsets.reshape([-1,1]), H,v_all,\
@@ -316,4 +364,4 @@ L2 = log_likelihood(w_all,\
 
 print(L1)
 print(L2)
-'''     
+     
