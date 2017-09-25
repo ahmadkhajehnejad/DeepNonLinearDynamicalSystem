@@ -117,7 +117,7 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     for i in range(M):
         tmp = tmp + EztztT[i][0]
     Sig_0 = (tmp / M) - np.matmul(mu_0, mu_0.T)
-    
+
     ############################ H
     
     H = np.ones([z_dim, v_dim]) / v_dim
@@ -156,10 +156,9 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     A = np.matmul(tmp_1, np.linalg.inv(tmp_2))
     #A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
     #A = np.linalg.solve(tmp_2.T,tmp_1.T).T
-    
-    
-    
+
     ############################ b
+    
     b = mean_Ezt - np.matmul(A,mean_Ezt_1) - mean_Hvt_1
     
     ############################ Q
@@ -167,20 +166,17 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     tmp = np.zeros([z_dim,z_dim])
     for i in range(M):
         for t in range(1,T):
-            tmp_0 = Ezt[i][:,t] - np.matmul(A,Ezt[i][:,t-1].reshape([-1,1])) - np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))
-            tmp_1 = np.matmul(A,np.matmul(Sigt[i][t-1], A.T)) + Sigt[i][t]
-            tmp_2 = - np.matmul(Sigt[i][t], np.matmul(Lt[i][t-1],A.T)) - np.matmul(A,np.matmul(Lt[i][t-1],Sigt[i][t]))
-            tmp = np.matmul(tmp_0, tmp_0.T) + tmp_1 + tmp_2
             
-            '''
-            tmp = tmp + EztztT[i][t] - 2*np.matmul(Ezt_1ztT[i][t].T,A.T) \
-            - 2*np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b,Ezt[i][:,t].reshape([1,-1])) \
-            + np.matmul(A, np.matmul(EztztT[i][t-1],A.T)) \
-            + 2*np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b,np.matmul(Ezt[i][:,t-1].reshape([1,-1]),A.T)) \
-            + np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b, (np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))+b).T)
-            '''
+            
+            #tmp_0 = np.matmul(H,v_all[i][t-1,:].reshape([-1,1])).reshape([-1,1]) + b
+            tmp_0 = np.matmul(H,v_all[i][t-1,:].reshape([-1,1])).reshape([-1,1]) + b_old
+            
+            tmp = tmp + EztztT[i][t] - np.matmul(Ezt_1ztT[i][t].T, A.T) - np.matmul(A,Ezt_1ztT[i][t])\
+                      - np.matmul(tmp_0, Ezt[i][:,t].reshape([1,-1])) - np.matmul(Ezt[i][:,t].reshape([-1,1]), tmp_0.T)\
+                      + np.matmul(A, np.matmul(EztztT[i][t-1],A.T)) + np.matmul(tmp_0,np.matmul(Ezt[i][:,t-1].reshape([1,-1]), A.T).reshape([1,-1]))\
+                      + np.matmul(A, np.matmul(Ezt[i][:,t-1].reshape([-1,1]), tmp_0.T)) + np.matmul(tmp_0, tmp_0.T)
+
     Q = tmp / ((T-1)*M)
-    
     
     ############################ C
     mean_wt = np.zeros([w_dim,1])
