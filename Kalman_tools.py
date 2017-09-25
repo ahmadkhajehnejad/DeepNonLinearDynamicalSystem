@@ -206,6 +206,18 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     d = mean_wt - np.matmul(C,mean_Ezt)
     
     ############################ R
+    tmp = np.zeros([w_dim,w_dim])
+    for i in range(M):
+        for t in range(T):
+            #tmp_0 = w_all[i][t,:].reshape([-1,1]) - d
+            tmp_0 = w_all[i][t,:].reshape([-1,1]) - d_old
+            tmp = tmp + np.matmul(tmp_0, tmp_0.T)\
+                      + np.matmul(C,np.matmul(EztztT[i][t],C.T))\
+                      - np.matmul(tmp_0, np.matmul(Ezt[i][:,t].reshape([1,-1]),C.T).reshape([1,-1]))\
+                      - np.matmul(np.matmul(C,Ezt[i][:,t].reshape([-1,1])).reshape([-1,1]), tmp_0.T)
+    R = tmp / (T*M)
+
+    '''    
     mean_wt_dwt_dT = np.zeros([w_dim, w_dim])
     mean_EztEztT = np.zeros([z_dim,z_dim])
     mean_wt_dEztT = np.zeros([w_dim,z_dim])
@@ -220,6 +232,7 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     
     R = mean_wt_dwt_dT + np.matmul(C, np.matmul(mean_EztEztT.T,C.T)) \
         - 2*np.matmul(mean_wt_dEztT,C.T)
+    '''
     return [A,b,H,C,d,Q,R,mu_0,Sig_0]
 
 
@@ -299,6 +312,11 @@ print()
 #print(d.reshape([-1]).)
 #print(kf.observation_offsets)
 print(np.max(np.abs(d.reshape([-1]) - kf.observation_offsets)))
+print()
+
+#print(R)
+#print(kf.observation_covariance)
+print(np.max(np.abs(R - kf.observation_covariance)))
 print()
 
 
