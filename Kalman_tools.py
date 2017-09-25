@@ -147,11 +147,10 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     mean_Hvt_1 = mean_Hvt_1 / ((T-1)*M)
     mean_Hvt_1Ezt_1T = mean_Hvt_1Ezt_1T / ((T-1)*M)
     
-    #tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) #- mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
+    #tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) - mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
     #tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
     tmp_1 = mean_Ezt_1ztT.T - np.matmul(b_old, mean_Ezt_1.T) - np.matmul(mean_Hvt_1, mean_Ezt_1.T)
     tmp_2 = mean_Ezt_1zt_1T
-    
     
     A = np.matmul(tmp_1, np.linalg.inv(tmp_2))
     #A = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
@@ -194,11 +193,13 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
     mean_Ezt = mean_Ezt / (T*M)
     mean_EztztT = mean_EztztT / (T*M)
     
-    tmp_1 = mean_wtEztT - np.matmul(mean_wt, mean_Ezt.T)
-    tmp_2 = mean_EztztT - np.matmul(mean_Ezt, mean_Ezt.T)
+    #tmp_1 = mean_wtEztT - np.matmul(mean_wt, mean_Ezt.T)
+    #tmp_2 = mean_EztztT - np.matmul(mean_Ezt, mean_Ezt.T)
+    tmp_1 = mean_wtEztT - np.matmul(d_old, mean_Ezt.T)
+    tmp_2 = mean_EztztT    
     
-    #C = np.matmul(tmp_1, np.linalg.inv(tmp_2))
-    C = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
+    C = np.matmul(tmp_1, np.linalg.inv(tmp_2))
+    #C = np.matmul(tmp_1, np.linalg.pinv(tmp_2))
     #C = np.linalg.solve(tmp_2.T,tmp_1.T).T
     ############################ d
     
@@ -240,7 +241,7 @@ for i in range(M):
 w_dim, z_dim, v_dim = 3, 2, 2
 mu_0, Sig_0 = np.zeros([z_dim,1]), np.eye(z_dim)
 A,b,H,Q = np.eye(z_dim), np.zeros([z_dim,1]), np.ones([z_dim, v_dim])/v_dim, np.eye(z_dim)
-C,d,R = np.ones([w_dim, z_dim])/z_dim, np.zeros([w_dim,1]), np.eye(w_dim)
+C,d,R = np.ones([w_dim, z_dim])/z_dim + np.random.uniform(-0.1,0.1,w_dim*z_dim).reshape([w_dim,z_dim]), np.zeros([w_dim,1]), np.eye(w_dim)
 
 
 kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
