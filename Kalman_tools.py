@@ -139,13 +139,14 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
             mean_Ezt_1zt_1T = mean_Ezt_1zt_1T + EztztT[i][t-1]
             mean_Hvt_1 = mean_Hvt_1 + np.matmul(H,v_all[i][t-1,:].reshape([-1,1]))
             mean_Hvt_1Ezt_1T = mean_Hvt_1Ezt_1T + np.matmul(np.matmul(H,v_all[i][t-1,:].reshape([-1,1])), Ezt[i][:,t-1].reshape([1,-1]))
-            
-    mean_Ezt = mean_Ezt / ((T-1)*M)
-    mean_Ezt_1 = mean_Ezt_1 / ((T-1)*M)
-    mean_Ezt_1ztT = mean_Ezt_1ztT / ((T-1)*M)
-    mean_Ezt_1zt_1T = mean_Ezt_1zt_1T / ((T-1)*M)
-    mean_Hvt_1 = mean_Hvt_1 / ((T-1)*M)
-    mean_Hvt_1Ezt_1T = mean_Hvt_1Ezt_1T / ((T-1)*M)
+      
+    if (T > 1):
+        mean_Ezt = mean_Ezt / ((T-1)*M)
+        mean_Ezt_1 = mean_Ezt_1 / ((T-1)*M)
+        mean_Ezt_1ztT = mean_Ezt_1ztT / ((T-1)*M)
+        mean_Ezt_1zt_1T = mean_Ezt_1zt_1T / ((T-1)*M)
+        mean_Hvt_1 = mean_Hvt_1 / ((T-1)*M)
+        mean_Hvt_1Ezt_1T = mean_Hvt_1Ezt_1T / ((T-1)*M)
     
     #tmp_1 = mean_Ezt_1ztT.T - np.matmul(mean_Ezt, mean_Ezt_1.T) - mean_Hvt_1Ezt_1T + np.matmul(mean_Hvt_1, mean_Ezt_1.T)
     #tmp_2 = mean_Ezt_1zt_1T - np.matmul(mean_Ezt_1, mean_Ezt_1.T)
@@ -187,7 +188,7 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
             mean_wt = mean_wt + w_all[i][t,:].reshape([-1,1])
             mean_wtEztT = mean_wtEztT + np.matmul(w_all[i][t,:].reshape([-1,1]),Ezt[i][:,t].reshape([1,-1]))
             mean_Ezt = mean_Ezt + Ezt[i][:,t].reshape([-1,1])
-            mean_EztztT = mean_EztztT + np.matmul(Ezt[i][:,t].reshape([-1,1]) , Ezt[i][:,t].reshape([1,-1]))
+            mean_EztztT = mean_EztztT + EztztT[i][t]
     mean_wt = mean_wt / (T*M)
     mean_wtEztT = mean_wtEztT / (T*M)
     mean_Ezt = mean_Ezt / (T*M)
@@ -217,22 +218,6 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
                       - np.matmul(np.matmul(C,Ezt[i][:,t].reshape([-1,1])).reshape([-1,1]), tmp_0.T)
     R = tmp / (T*M)
 
-    '''    
-    mean_wt_dwt_dT = np.zeros([w_dim, w_dim])
-    mean_EztEztT = np.zeros([z_dim,z_dim])
-    mean_wt_dEztT = np.zeros([w_dim,z_dim])
-    for i in range(M):
-        for t in range(T):
-            mean_wt_dwt_dT = mean_wt_dwt_dT + np.matmul(w_all[i][t,:].reshape([-1,1]) - d, (w_all[i][t,:].reshape([-1,1]) - d).T)
-            mean_EztEztT = mean_EztEztT + EztztT[i][t]
-            mean_wt_dEztT = mean_wt_dEztT + np.matmul(w_all[i][t,:].reshape([-1,1]) - d,Ezt[i][:,t].reshape([1,-1]))
-    mean_wt_dwt_dT = mean_wt_dwt_dT / (T*M)
-    mean_EztEztT = mean_EztEztT / (T*M)
-    mean_wt_dEztT = mean_wt_dEztT / (T*M)
-    
-    R = mean_wt_dwt_dT + np.matmul(C, np.matmul(mean_EztEztT.T,C.T)) \
-        - 2*np.matmul(mean_wt_dEztT,C.T)
-    '''
     return [A,b,H,C,d,Q,R,mu_0,Sig_0]
 
 
@@ -242,16 +227,17 @@ def EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b, d)
     return [A,b,H,C,d,Q,R,mu_0,Sig_0]
 
-T = 5
+w_dim, z_dim, v_dim = 1, 1, 1
+
+T = 2
 M = 1
 w_all = [None]*M
 v_all = [None]*M
 for i in range(M):
     for t in range(T):
-        w_all[i] = np.random.uniform(-1,1,3*T).reshape([T,3])
-        v_all[i] = np.zeros([T,2])
-    
-w_dim, z_dim, v_dim = 3, 2, 2
+        w_all[i] = np.random.uniform(-1,1,w_dim*T).reshape([T,w_dim])
+        v_all[i] = np.zeros([T,v_dim])
+        
 mu_0, Sig_0 = np.zeros([z_dim,1]), np.eye(z_dim)
 A,b,H,Q = np.eye(z_dim), np.zeros([z_dim,1]), np.ones([z_dim, v_dim])/v_dim, np.eye(z_dim)
 C,d,R = np.ones([w_dim, z_dim])/z_dim + np.random.uniform(-0.1,0.1,w_dim*z_dim).reshape([w_dim,z_dim]), np.zeros([w_dim,1]), np.eye(w_dim)
