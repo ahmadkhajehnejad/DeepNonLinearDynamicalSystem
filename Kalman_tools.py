@@ -93,9 +93,9 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             if t < (T-1):
                 Lt[i][t] = L
     
-    return [Ezt, EztztT, Ezt_1ztT, Sigt, Lt]
+    return [Ezt, EztztT, Ezt_1ztT]
 
-def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
+def maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b_old, d_old):
     
     w_dim = w_all[0].shape[1]
     v_dim = v_all[0].shape[1]
@@ -223,89 +223,9 @@ def maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b_old, d_old):
 
 
 def EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
-    [Ezt, EztztT, Ezt_1ztT, Sigt, Lt] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-    [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, Sigt, Lt, w_all, v_all, b, d)
+    [Ezt, EztztT, Ezt_1ztT] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
+    [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
     return [A,b,H,C,d,Q,R,mu_0,Sig_0]
-
-w_dim, z_dim, v_dim = 1, 1, 1
-
-T = 2
-M = 1
-w_all = [None]*M
-v_all = [None]*M
-for i in range(M):
-    for t in range(T):
-        w_all[i] = np.random.uniform(-1,1,w_dim*T).reshape([T,w_dim])
-        v_all[i] = np.zeros([T,v_dim])
-        
-mu_0, Sig_0 = np.zeros([z_dim,1]), np.eye(z_dim)
-A,b,H,Q = np.eye(z_dim), np.zeros([z_dim,1]), np.ones([z_dim, v_dim])/v_dim, np.eye(z_dim)
-C,d,R = np.ones([w_dim, z_dim])/z_dim + np.random.uniform(-0.1,0.1,w_dim*z_dim).reshape([w_dim,z_dim]), np.zeros([w_dim,1]), np.eye(w_dim)
-
-
-kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
-                  initial_state_covariance = Sig_0,
-                  transition_matrices = A,
-                  transition_offsets = b.reshape([-1]),
-                  transition_covariance = Q,
-                  observation_matrices = C,
-                  observation_offsets = d.reshape([-1]),
-                  observation_covariance = R)
-kf = kf.em(w_all[0],n_iter=1,em_vars=['initial_state_mean', 'initial_state_covariance',\
-           'transition_matrices', 'transition_offsets', 'transition_covariance', \
-           'observation_matrices', 'observation_offsets', 'observation_covariance'])
-
-for i in range(1):
-    [A,b,H,C,d,Q,R,mu_0,Sig_0] = \
-    EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-    
-    
-
-#print(mu_0.reshape([-1]))
-#print(kf.initial_state_mean)
-print(np.max(np.abs(mu_0.reshape([-1]) - kf.initial_state_mean)))
-print()
-
-#print(Sig_0)
-#print(kf.initial_state_covariance)
-print(np.max(np.abs(Sig_0 - kf.initial_state_covariance)))
-print()
-
-#print(A)
-#print(kf.transition_matrices)
-print(np.max(np.abs(A - kf.transition_matrices)))
-print()
-
-#print(b.reshape([-1]))
-#print(kf.transition_offsets)
-print(np.max(np.abs(b.reshape([-1]) - kf.transition_offsets)))
-print()
-
-#print(Q)
-#print(kf.transition_covariance)
-print(np.max(np.abs(Q - kf.transition_covariance)))
-print()
-
-print("----------------")
-print()
-
-#print(C)
-#print(kf.observation_matrices)
-print(np.max(np.abs(C - kf.observation_matrices)))
-print()
-
-
-#print(d.reshape([-1]).)
-#print(kf.observation_offsets)
-print(np.max(np.abs(d.reshape([-1]) - kf.observation_offsets)))
-print()
-
-#print(R)
-#print(kf.observation_covariance)
-print(np.max(np.abs(R - kf.observation_covariance)))
-print()
-
-
 
 def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
     
@@ -375,13 +295,93 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
 
 
 
-L1 = log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-L2 = log_likelihood(w_all,\
-                    kf.transition_matrices, kf.transition_offsets.reshape([-1,1]), H,v_all,\
-                    kf.observation_matrices, kf.observation_offsets.reshape([-1,1]),\
-                    kf.transition_covariance, kf.observation_covariance,\
-                    kf.initial_state_mean.reshape([-1,1]), kf.initial_state_covariance)
+def test_Kalman_tools():
+    
+    w_dim, z_dim, v_dim = 1, 1, 1
+    
+    T = 2
+    M = 1
+    w_all = [None]*M
+    v_all = [None]*M
+    for i in range(M):
+        for t in range(T):
+            w_all[i] = np.random.uniform(-1,1,w_dim*T).reshape([T,w_dim])
+            v_all[i] = np.zeros([T,v_dim])
+            
+    mu_0, Sig_0 = np.zeros([z_dim,1]), np.eye(z_dim)
+    A,b,H,Q = np.eye(z_dim), np.zeros([z_dim,1]), np.ones([z_dim, v_dim])/v_dim, np.eye(z_dim)
+    C,d,R = np.ones([w_dim, z_dim])/z_dim + np.random.uniform(-0.1,0.1,w_dim*z_dim).reshape([w_dim,z_dim]), np.zeros([w_dim,1]), np.eye(w_dim)
+    
+    
+    kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
+                      initial_state_covariance = Sig_0,
+                      transition_matrices = A,
+                      transition_offsets = b.reshape([-1]),
+                      transition_covariance = Q,
+                      observation_matrices = C,
+                      observation_offsets = d.reshape([-1]),
+                      observation_covariance = R)
+    kf = kf.em(w_all[0],n_iter=1,em_vars=['initial_state_mean', 'initial_state_covariance',\
+               'transition_matrices', 'transition_offsets', 'transition_covariance', \
+               'observation_matrices', 'observation_offsets', 'observation_covariance'])
+    
+    for i in range(1):
+        [A,b,H,C,d,Q,R,mu_0,Sig_0] = \
+        EM_step(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
+        
+        
+    
+    #print(mu_0.reshape([-1]))
+    #print(kf.initial_state_mean)
+    print(np.max(np.abs(mu_0.reshape([-1]) - kf.initial_state_mean)))
+    print()
+    
+    #print(Sig_0)
+    #print(kf.initial_state_covariance)
+    print(np.max(np.abs(Sig_0 - kf.initial_state_covariance)))
+    print()
+    
+    #print(A)
+    #print(kf.transition_matrices)
+    print(np.max(np.abs(A - kf.transition_matrices)))
+    print()
+    
+    #print(b.reshape([-1]))
+    #print(kf.transition_offsets)
+    print(np.max(np.abs(b.reshape([-1]) - kf.transition_offsets)))
+    print()
+    
+    #print(Q)
+    #print(kf.transition_covariance)
+    print(np.max(np.abs(Q - kf.transition_covariance)))
+    print()
+    
+    print("----------------")
+    print()
+    
+    #print(C)
+    #print(kf.observation_matrices)
+    print(np.max(np.abs(C - kf.observation_matrices)))
+    print()
+    
+    
+    #print(d.reshape([-1]).)
+    #print(kf.observation_offsets)
+    print(np.max(np.abs(d.reshape([-1]) - kf.observation_offsets)))
+    print()
+    
+    #print(R)
+    #print(kf.observation_covariance)
+    print(np.max(np.abs(R - kf.observation_covariance)))
+    print()
 
-print(L1)
-print(L2)
+    L1 = log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
+    L2 = log_likelihood(w_all,\
+                        kf.transition_matrices, kf.transition_offsets.reshape([-1,1]), H,v_all,\
+                        kf.observation_matrices, kf.observation_offsets.reshape([-1,1]),\
+                        kf.transition_covariance, kf.observation_covariance,\
+                        kf.initial_state_mean.reshape([-1,1]), kf.initial_state_covariance)
+    
+    print(L1)
+    print(L2)
      
