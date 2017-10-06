@@ -291,7 +291,7 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                                 w_all[i][t,:].reshape([-1,1]) - mu_xt_x1tot_1)
             #L = L + multivariate_normal.logpdf(w_all[i][t,:],mean=mu_xt_x1tot_1.reshape([-1]),cov=Sig_xt_x1tot_1)
         
-    return L
+    return L[0]
 
 
 
