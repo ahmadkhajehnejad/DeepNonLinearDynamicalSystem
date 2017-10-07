@@ -34,6 +34,16 @@ dec.add(Dense(x_dim, activation='sigmoid')) ############# input should be normal
 
 x = Input(shape=(x_dim,))
 w = enc(x)
+
+noise_std = 0.2
+def add_noise(w):
+    sh = K.shape(w)
+    epsilon = K.random_normal(shape=(sh), mean=0.,
+                              stddev=noise_std)
+    return w + epsilon 
+    
+#w_noisy = Lambda(add_noise, output_shape=(w_dim,))(w)
+#x_bar = dec(w_noisy)
 x_bar = dec(w)
 AE = Model([x],[x_bar,w])
 
@@ -56,12 +66,15 @@ def AE_TRAIN(net_in, net_out, loss_2, lr, loss_weights, epochs):
               shuffle=True,
               epochs= epochs,
               batch_size=batch_size,
-              verbose=0)
+              verbose=1)
     return hist
 
 
 [tmp_X, tmp_U, _] = pickle.load(open('plane_random_trajectory_train', 'rb'))
 tmp_U = tmp_U[:-1,:]
+
+[x_test, _, _] = pickle.load(open('plane_random_trajectory_test', 'rb'))
+x_test = x_test.reshape([x_test.shape[0],-1])
 
 x_all = [tmp_X.reshape([tmp_X.shape[0],-1])]
 u_all = [tmp_U.reshape([tmp_U.shape[0],-1])]
@@ -81,18 +94,16 @@ w_all = [None] * len(x_all)
 v_all = [None] * len(u_all)
 
 IterNum_EM = 50
-IterNum_CoordAsc = 10
+IterNum_CoordAsc = 5
 #IterNum_DeepTrain = 1000
 batch_size = 100
 
 loglik = []
+recons_error = []
 for iter_EM in range(IterNum_EM):
     
     if not(os.path.isdir('./tuned_params')):
         os.mkdir('./tuned_params')
-    AE.save_weights('./tuned_params/' + str(iter_EM) + '_AE_params.h5')
-    act_map.save_weights('./tuned_params/' + str(iter_EM) + '_act_map_params.h5')
-    pickle.dump([A,b,H,C,d,Q,R,mu_0,Sig_0], open('./tuned_params/' + str(iter_EM) + '_LDS_params.pkl', 'wb'))
     
     if not(os.path.isdir('./tuned_params/' + str(iter_EM))):
         os.mkdir('./tuned_params/' + str(iter_EM))
@@ -102,22 +113,25 @@ for iter_EM in range(IterNum_EM):
     for i in range(len(u_all)):
         v_all[i] = act_map.predict(u_all[i])
 
+    if iter_EM == 0:
+        loglik.append(Kalman_tools.log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0))
+        print('')
+        print('loglik = ')
+        print(loglik)
+        [x_bar,_] = AE.predict(x_test)
+        tmp = np.mean((x_bar - x_test) ** 2)
+        recons_error.append(tmp)
+        print('recons_error = ')
+        print(recons_error)
+
     [Ezt, EztztT, Ezt_1ztT] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
     
     for iter_CoorAsc in range(IterNum_CoordAsc):
-        AE.save_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
-        act_map.save_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
-        pickle.dump([A,b,H,C,d,Q,R,mu_0,Sig_0], open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'wb'))
         
         for i in range(len(x_all)):
             w_all[i] = enc.predict(x_all[i])
         for i in range(len(u_all)):
             v_all[i] = act_map.predict(u_all[i])
-        
-        loglik.append(Kalman_tools.log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0))
-        print('')
-        print('loglik = ')
-        print(loglik)
         
         [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
         Rinv = np.linalg.inv(R)
@@ -164,7 +178,7 @@ for iter_EM in range(IterNum_EM):
         print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
         print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
         print('-------------------')
-
+        
         i_start, i_end = 0, -1
         for i in range(len(v_all)):
             i_end = i_start + v_all[i].shape[0]
@@ -188,7 +202,31 @@ for iter_EM in range(IterNum_EM):
                   batch_size=batch_size,
                   verbose=0)
         print(np.mean(hist.history['loss'][-10:]))
+        
+        loglik.append(Kalman_tools.log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0))
+        print('')
+        print('loglik = ')
+        print(loglik)
+        [x_bar,_] = AE.predict(x_test)
+        tmp = np.mean((x_bar - x_test) ** 2)
+        recons_error.append(tmp)
+        print('recons_error = ')
+        print(recons_error)
 
+        
+        AE.save_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
+        act_map.save_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
+        pickle.dump([A,b,H,C,d,Q,R,mu_0,Sig_0], open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'wb'))
+        pickle.dump([loglik,recons_error], open('./results.pkl','wb'))
+        
+
+    
+    AE.save_weights('./tuned_params/' + str(iter_EM) + '_AE_params.h5')
+    act_map.save_weights('./tuned_params/' + str(iter_EM) + '_act_map_params.h5')
+    pickle.dump([A,b,H,C,d,Q,R,mu_0,Sig_0], open('./tuned_params/' + str(iter_EM) + '_LDS_params.pkl', 'wb'))
+    pickle.dump(loglik, open('./loglikelihood.pkl', 'wb'))
+    
+    
 ##################### TEST
 
 AE.load_weights('./tuned_params/2/0_AE_params.h5')
