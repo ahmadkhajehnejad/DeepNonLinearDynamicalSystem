@@ -42,9 +42,9 @@ def add_noise(w):
                               stddev=noise_std)
     return w + epsilon 
     
-#w_noisy = Lambda(add_noise, output_shape=(w_dim,))(w)
-#x_bar = dec(w_noisy)
-x_bar = dec(w)
+w_noisy = Lambda(add_noise, output_shape=(w_dim,))(w)
+x_bar = dec(w_noisy)
+#x_bar = dec(w)
 AE = Model([x],[x_bar,w])
 
 act_map = Sequential()
@@ -154,26 +154,26 @@ for iter_EM in range(IterNum_EM):
                                           tf.reshape(tf.matmul(w,Rinv),[sh[0],1,-1])\
                                           ,tf.reshape(w,[sh[0],sh[1],1])\
                                          )
-        if (iter_EM == 0) and (iter_CoorAsc == 0):
-            hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.001, loss_weights=[1.,0.], epochs=50)
-            print('-------------------')
-            print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
-            print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
-            print('-------------------')
-        
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.0001, loss_weights=[1.,.0001], epochs=50)
+        #if (iter_EM == 0) and (iter_CoorAsc == 0):
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.001, loss_weights=[1.,0.], epochs=100)
         print('-------------------')
         print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
         print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
         print('-------------------')
         
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.00001, loss_weights=[1.,.0001], epochs=50)
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.0001, loss_weights=[1.,.00001], epochs=100)
         print('-------------------')
         print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
         print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
         print('-------------------')
         
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.000001, loss_weights=[1.,.0001], epochs=50)
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.00001, loss_weights=[1.,.00001], epochs=100)
+        print('-------------------')
+        print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
+        print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
+        print('-------------------')
+        
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, EzT_CT_Rinv_minus_dT_Rinv], loss_2 = AE_loss_2, lr=0.000001, loss_weights=[1.,.00001], epochs=100)
         print('-------------------')
         print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
         print(np.mean(hist.history[list(hist.history.keys())[2]][-10:]))
@@ -219,7 +219,6 @@ for iter_EM in range(IterNum_EM):
         pickle.dump([A,b,H,C,d,Q,R,mu_0,Sig_0], open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'wb'))
         pickle.dump([loglik,recons_error], open('./results.pkl','wb'))
         
-
     
     AE.save_weights('./tuned_params/' + str(iter_EM) + '_AE_params.h5')
     act_map.save_weights('./tuned_params/' + str(iter_EM) + '_act_map_params.h5')
@@ -299,12 +298,12 @@ def nearest_w(w, w_train):
 
 w_test = enc.predict(x_test)
 w_train = enc.predict(x_train)
-w_0 = w_test[0]
-w_1 = w_test[90]
+w_0 = w_test[10]
+w_1 = w_test[80]
 delta_w = (w_1 - w_0) / 9
 plt.figure()
 plt.subplot(2,6,1)
-plt.imshow(x_test[0].reshape(40,40), cmap='Greys')
+plt.imshow(x_test[10].reshape(40,40), cmap='Greys')
 for i in range(10):
     i
     #w_t = nearest_w(w_0 + i*delta_w, w_train)
@@ -313,4 +312,4 @@ for i in range(10):
     plt.subplot(2,6,i+2)            
     plt.imshow(x_t.reshape(40,40), cmap='Greys')
 plt.subplot(2,6,12)
-plt.imshow(x_test[90].reshape(40,40), cmap='Greys')
+plt.imshow(x_test[80].reshape(40,40), cmap='Greys')
