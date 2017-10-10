@@ -12,56 +12,50 @@ import os
 import Kalman_tools
 from Kalman_tools import expectation, maximization, EM_step
 
-default_act_func = 'relu'
-
-w_dim, z_dim, v_dim, x_dim, u_dim = 10, 2, 2, 40*40, 2
+w_dim, z_dim, v_dim, x_dim, u_dim = 2, 2, 2, 40*40, 2
     
 mu_0, Sig_0 = np.zeros([z_dim,1]), np.eye(z_dim)
 A,b,H,Q = np.eye(z_dim) + np.random.uniform(-0.1,0.1,z_dim*z_dim).reshape([z_dim,z_dim]), np.zeros([z_dim,1]), np.ones([z_dim, v_dim])/v_dim, np.eye(z_dim)
 C,d,R = np.ones([w_dim, z_dim])/z_dim + np.random.uniform(-0.1,0.1,w_dim*z_dim).reshape([w_dim,z_dim]), np.zeros([w_dim,1]), np.eye(w_dim)
 
-
 x = Input(shape=(x_dim,))
-h_1 = Dense(500, activation=default_act_func)(x)
-h_2 = Dense(200, activation=default_act_func)(h_1)
-h_3 = Dense(100, activation=default_act_func)(h_2)
-w_mean_q = Dense(w_dim, activation=None)(h_3)
-h_4 = Dense(100, activation=default_act_func)(h_2)
-w_logSig_q = Dense(w_dim, activation=None)(h_4)
+h = Dense(256, activation='relu')(x)
+w_mean = Dense(w_dim)(h)
+w_log_var = Dense(w_dim)(h)
 
 def sampling(args):
-    z_mean, z_log_var = args
-    sh = K.shape(z_mean)
-    epsilon = K.random_normal(shape=sh, mean=0.,
-                              stddev=1)
-    return z_mean + K.exp(z_log_var/ 2) * epsilon
-    
-w = Lambda(sampling, output_shape=(w_dim,))([w_mean_q, w_logSig_q])
+    w_mean, w_log_var = args
+    epsilon = K.random_normal(shape=(K.shape(w_mean)[0], w_dim), mean=0.,
+                              stddev=1.)
+    return w_mean + K.exp(w_log_var / 2) * epsilon
+
+w = Lambda(sampling, output_shape=(w_dim,))([w_mean, w_log_var])
 
 enc = Model([x],[w])
 
-dec = Sequential()
-dec.add(Dense(100, input_shape=(w_dim,), activation=default_act_func))
-dec.add(Dense(200, activation=default_act_func))
-dec.add(Dense(500, activation=default_act_func))
-dec.add(Dense(x_dim, activation='sigmoid')) ############# input should be normalized
+decoder_h = Dense(256, activation='relu')
+decoder_mean = Dense(x_dim, activation='sigmoid')
+h_decoded = decoder_h(w)
+x_bar = decoder_mean(h_decoded)
 
-x_bar = dec(w)
+decoder_input = Input(shape=(w_dim,))
+_h_decoded = decoder_h(decoder_input)
+_x_decoded_mean = decoder_mean(_h_decoded)
+dec = Model(decoder_input, _x_decoded_mean)
+
 AE = Model([x],[x_bar,x_bar,w])
 
-act_map = Sequential()
-act_map.add(Dense(5, input_shape=(u_dim,), activation=default_act_func))
-act_map.add(Dense(5, activation=default_act_func))
-act_map.add(Dense(v_dim, activation='sigmoid'))
+u_in = Input(shape=(u_dim,))
+h_u = Dense(5,activation='relu')(u_in)
+u_out = Dense(v_dim, activation='sigmoid')(h_u)
 
-
+act_map = Model(u_in,u_out)
 
 def AE_recons_loss(x_true, x_bar):
-    #return w_dim * keras.losses.binary_crossentropy(x_true, x_bar)
-    return w_dim * keras.losses.mean_squared_error(x_true, x_bar)#keras.losses.mean_squared_error(x_true, x_bar) ## might be better to be changed to binary_cross_entropy
+    return x_dim * keras.metrics.binary_crossentropy(x_true, x_bar)#keras.losses.mean_squared_error(x_true, x_bar) ## might be better to be changed to binary_cross_entropy
     
 def AE_KL_loss(true_out, est_out):
-    return 0.5 * (K.sum(K.exp(w_logSig_q), axis=-1) + K.sum(w_mean_q*w_mean_q, axis=-1) - K.sum(w_logSig_q, axis=-1) - w_dim)
+    return - 0.5 * K.sum(1 + w_log_var - K.square(w_mean) - K.exp(w_log_var), axis=-1)
 
 def AE_TRAIN(net_in, net_out, LDS_loss, lr, loss_weights, epochs):
     AE_adam = optimizers.Adam(lr=lr, beta_1=0.1)
@@ -74,19 +68,47 @@ def AE_TRAIN(net_in, net_out, LDS_loss, lr, loss_weights, epochs):
               verbose=1)
     return hist
 
-
+print('data load start')
 [tmp_X, tmp_U, _] = pickle.load(open('plane_random_trajectory_train', 'rb'))
-tmp_U = tmp_U[:-1,:]
+print('data load finish')
 
-[x_test, _, _] = pickle.load(open('plane_random_trajectory_test', 'rb'))
-x_test = x_test.reshape([x_test.shape[0],-1])
+x_all = [None] * len(tmp_X)
+u_all = [None] * len(tmp_U)
+for i in range(len(tmp_X)):
+    x_all[i] = tmp_X[i].reshape([tmp_X[i].shape[0],-1])
+    u_all[i] = tmp_U[i][:-1,:].reshape([tmp_U[i].shape[0]-1,-1])
 
-x_all = [tmp_X.reshape([tmp_X.shape[0],-1])]
-u_all = [tmp_U.reshape([tmp_U.shape[0],-1])]
+n_train = 0;
+for i in range(len(x_all)):
+    n_train = n_train + x_all[i].shape[0]
 
+x_train = np.zeros([n_train,x_dim])
+i_start, i_finish = 0, -1
+for i in range(len(x_all)):
+    i_finish = i_start + len(x_all[i])
+    x_train[i_start:i_finish,:] = x_all[i]
+    i_start = i_finish
+'''
 x_train = x_all[0]
 for i in range(1,len(x_all)):
     x_train = np.concatenate([x_train, x_all[i]])
+'''
+
+print('train data is ready.')
+
+print('data load start')
+[tmp_X, _, _] = pickle.load(open('plane_random_trajectory_test', 'rb'))
+print('data load finish')
+
+x_test_all = [None] * len(tmp_X)
+for i in range(len(tmp_X)):
+    x_test_all[i] = tmp_X[i].reshape([tmp_X[i].shape[0],-1])
+
+x_test = x_test_all[0]
+for i in range(1,len(x_test_all)):
+    x_test = np.concatenate([x_test, x_test_all[i]])
+
+print('test data is ready.')
 
 EzT_CT_Rinv_minus_dT_Rinv = np.zeros([x_train.shape[0],w_dim])
 
@@ -161,17 +183,20 @@ for iter_EM in range(IterNum_EM):
                                           ,tf.reshape(w,[sh[0],sh[1],1])\
                                          )
         if (iter_EM == 0) and (iter_CoorAsc == 0):
-            hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.0001, loss_weights=[1., 1., 0.], epochs=1000)
-            print('-------------------')
-            print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
-            print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
-            print('-------------------')
-            
-            hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.0001, loss_weights=[1., 1., 0.], epochs=50)
-            print('-------------------')
-            print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
-            print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
-            print('-------------------')
+            AE.load_weights('./cache_0_0_AE_params.h5')
+            #hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.001, loss_weights=[1., 1., 0.], epochs=200)
+            #print('-------------------')
+            #print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
+            #print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
+            #print('-------------------')
+            #AE.save_weights('./cache_0_0_AE_params.h5')
+
+        
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.001, loss_weights=[1., 1., 1.], epochs=50)
+        print('-------------------')
+        print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
+        print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
+        print('-------------------')
         
         hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.0001, loss_weights=[1., 1., .00001], epochs=50)
         print('-------------------')
@@ -180,12 +205,6 @@ for iter_EM in range(IterNum_EM):
         print('-------------------')
         
         hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.00001, loss_weights=[1., 1., .00001], epochs=50)
-        print('-------------------')
-        print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
-        print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
-        print('-------------------')
-        
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.000001, loss_weights=[1., 1., .00001], epochs=50)
         print('-------------------')
         print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
         print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
@@ -311,7 +330,7 @@ def nearest_w(w, w_train):
 w_test = enc.predict(x_test)
 w_train = enc.predict(x_train)
 w_0 = w_test[10]
-w_1 = w_test[80]
+w_1 = w_test[70]
 delta_w = (w_1 - w_0) / 9
 plt.figure()
 plt.subplot(2,6,1)
@@ -321,7 +340,7 @@ for i in range(10):
     #w_t = nearest_w(w_0 + i*delta_w, w_train)
     w_t = w_0 + i*delta_w
     x_t = dec.predict(w_t.reshape([1,-1]))
-    plt.subplot(2,6,i+2)            
+    plt.subplot(2,6,i+2)
     plt.imshow(x_t.reshape(40,40), cmap='Greys')
 plt.subplot(2,6,12)
-plt.imshow(x_test[80].reshape(40,40), cmap='Greys')
+plt.imshow(x_test[70].reshape(40,40), cmap='Greys')
