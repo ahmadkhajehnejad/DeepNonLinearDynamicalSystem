@@ -183,13 +183,13 @@ for iter_EM in range(IterNum_EM):
                                           ,tf.reshape(w,[sh[0],sh[1],1])\
                                          )
         if (iter_EM == 0) and (iter_CoorAsc == 0):
-            AE.load_weights('./cache_0_0_AE_params.h5')
+            AE.load_weights('./cache_0_0_variationalAE_params.h5')
             #hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.001, loss_weights=[1., 1., 0.], epochs=200)
             #print('-------------------')
             #print(np.mean(hist.history[list(hist.history.keys())[1]][-10:]))
             #print(np.mean(hist.history[list(hist.history.keys())[3]][-10:]))
             #print('-------------------')
-            #AE.save_weights('./cache_0_0_AE_params.h5')
+            #AE.save_weights('./cache_0_0_variationalAE_params.h5')
 
         
         hist = AE_TRAIN(net_in=x_train, net_out=[x_train, np.zeros([N,w_dim]), EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.001, loss_weights=[1., 1., 1.], epochs=50)
@@ -238,7 +238,7 @@ for iter_EM in range(IterNum_EM):
         print('')
         print('loglik = ')
         print(loglik)
-        [x_bar,_] = AE.predict(x_test)
+        [x_bar, _, _] = AE.predict(x_test)
         tmp = np.mean((x_bar - x_test) ** 2)
         recons_error.append(tmp)
         print('recons_error = ')
@@ -294,7 +294,7 @@ plt.imshow(x_est[ii].reshape(40,40), cmap='Greys')
 #################
 
 
-[x_bar,_] = AE.predict(x_test)
+[x_bar, _, _] = AE.predict(x_test)
 np.mean((x_bar - x_test) ** 2)
 
 ii = 40
@@ -306,7 +306,7 @@ plt.imshow(x_bar[ii].reshape(40,40), cmap='Greys')
 
 #################
 
-[x_bar,_] = AE.predict(x_train)
+[x_bar, _, _] = AE.predict(x_train)
 np.mean((x_bar - x_train) ** 2)
 
 ii = 40
