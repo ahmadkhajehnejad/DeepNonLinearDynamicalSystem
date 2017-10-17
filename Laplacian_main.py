@@ -31,6 +31,7 @@ IterNum_CoordAsc = 5
 batch_size = 100
 recons_error = []
 loglik = []
+E_log = []
 
 exec(open('log_tools.py').read())
 
@@ -42,60 +43,63 @@ for iter_EM in range(IterNum_EM):
     for i in range(len(x_all)):
         w_all[i] = enc.predict(x_all[i])
     for i in range(len(u_all)):
-        v_all[i] = act_map.predict(u_all[i])
-    
-    if iter_EM == 0:
-        log_update_loglik_recons()
+        v_all[i] = act_map.predict(u_all[i])        
     
     [Ezt, EztztT, Ezt_1ztT] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-    
-    for iter_CoorAsc in range(IterNum_CoordAsc):
-        
-        for i in range(len(x_all)):
-            w_all[i] = enc.predict(x_all[i])
-        for i in range(len(u_all)):
-            v_all[i] = act_map.predict(u_all[i])
-        
+
+    if iter_EM == 0:    
         [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
         Rinv = np.linalg.inv(R)
         Qinv = np.linalg.inv(Q)
+        #log_update_loglik_recons()
+        log_update_E_log()
+
+    
+    for iter_CoorAsc in range(IterNum_CoordAsc):
         
-        log_print_E()
-        
+        ##### update AE parameters ###########################################
         i_start, i_end = 0, -1
         for i in range(len(w_all)):
             i_end = i_start + w_all[i].shape[0]
             EzT_CT = np.matmul(Ezt[i].T, C.T)
-            EzT_CT_minus_dT = EzT_CT - np.tile(d.reshape([1,-1]),[EzT_CT.shape[0],1])
-            EzT_CT_Rinv_minus_dT_Rinv[i_start:i_end,:] = np.matmul(EzT_CT_minus_dT, Rinv)
+            EzT_CT_plus_dT = EzT_CT + np.tile(d.reshape([1,-1]),[EzT_CT.shape[0],1])
+            EzT_CT_Rinv_plus_dT_Rinv[i_start:i_end,:] = np.matmul(EzT_CT_plus_dT, Rinv)
             i_start = i_end
         
         Rinv_tf = tf.constant(Rinv, dtype='float32')
         
         N = x_train.shape[0]
-        def LDS_loss(EzT_CT_Rinv_minus_dT_Rinv, w):
+        def LDS_loss(EzT_CT_Rinv_plus_dT_Rinv, w):
             sh = K.shape(w)
-            return -tf.matmul(tf.reshape(EzT_CT_Rinv_minus_dT_Rinv,[sh[0],1,sh[1]]), tf.reshape(w,[sh[0],sh[1],1])) \
+            return -tf.matmul(tf.reshape(EzT_CT_Rinv_plus_dT_Rinv,[sh[0],1,sh[1]]), tf.reshape(w,[sh[0],sh[1],1])) \
                         + 0.5 * tf.matmul(\
                                           tf.reshape(tf.matmul(w,Rinv_tf),[sh[0],1,-1])\
                                           ,tf.reshape(w,[sh[0],sh[1],1])\
                                          )
         #if (iter_EM == 0) and (iter_CoorAsc == 0):
             #AE.load_weights('./cache_0_0_simpleAE_params.h5')
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.001, loss_weights=[1., 1., .001], epochs=100)
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
+                        LDS_loss = LDS_loss, lr=0.0005, loss_weights=[1., 1., 1.], epochs=100)
         log_print_fit_hist(hist)
             #AE.save_weights('./cache_0_0_simpleAE_params.h5')
         
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_minus_dT_Rinv], LDS_loss = LDS_loss, lr=0.0003, loss_weights=[1., 1., .001], epochs=100)
+        log_update_E_log()
+        
+        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
+                        LDS_loss = LDS_loss, lr=0.0005, loss_weights=[1., 1., 1.], epochs=100)
         log_print_fit_hist(hist)
         
-        log_print_E()
+        log_update_E_log()
+        
+        
+        ##########  update act_map parameters #############################
         
         i_start, i_end = 0, -1
         for i in range(len(v_all)):
             i_end = i_start + v_all[i].shape[0]
             EztT_minus_Ezt_1TAT_bT = Ezt[i][:,1:].T - np.matmul(Ezt[i][:,:-1].T,A.T) - np.tile(b.T,[Ezt[i].shape[1]-1,1])
             EztT_minus_Ezt_1TAT_bT_alltimes_QinvH[i_start:i_end,:] = np.matmul(np.matmul(EztT_minus_Ezt_1TAT_bT, Qinv),H)
+            i_start = i_end
             
         HTQinvH = np.matmul(np.matmul(H.T, Qinv),H)
         HTQinvH = tf.constant(HTQinvH, dtype='float32')
@@ -113,18 +117,31 @@ for iter_EM in range(IterNum_EM):
                   epochs= 100,
                   batch_size=batch_size,
                   verbose=0)
-        print(np.mean(hist.history['loss'][-10:]))
-        log_print_E()
+        # print(np.mean(hist.history['loss'][-10:]))
+        log_update_E_log()
         
-        log_update_loglik_recons()
+        ############ update DLS parameters
+        
+        for i in range(len(x_all)):
+            w_all[i] = enc.predict(x_all[i])
+        for i in range(len(u_all)):
+            v_all[i] = act_map.predict(u_all[i])
+        
+        #[A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
+        Rinv = np.linalg.inv(R)
+        Qinv = np.linalg.inv(Q)
+        
+        #log_update_E_log()
+        
+        #log_update_loglik_recons()
         log_save_weights(iter_EM, iter_CoorAsc)        
         
     log_save_weights(iter_EM, -1)        
 ##################### TEST
 
-AE.load_weights('./tuned_params/2/0_AE_params.h5')
-act_map.load_weights('./tuned_params/0/0_act_map_params.h5')
-[A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/2/0LDS_params.pkl','rb'))
+#AE.load_weights('./tuned_params/2/0_AE_params.h5')
+#act_map.load_weights('./tuned_params/0/0_act_map_params.h5')
+#[A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/2/0LDS_params.pkl','rb'))
 
 from pykalman import KalmanFilter
 
@@ -137,14 +154,19 @@ kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
                   observation_offsets = d.reshape([-1]),
                   observation_covariance = R)
 
-[x_test, u_test, _] = pickle.load(open('plane_random_trajectory_test', 'rb'))
-x_test = x_test.reshape([x_test.shape[0],-1])
-u_test = u_test[:-1,:]
-
-w_test = enc.predict(x_test)
-[z_est, z_est_var] = kf.filter(w_test)
-w_est = np.matmul(z_est, C.T) + np.tile(d.reshape([1,-1]),[z_est.shape[0],1])
-x_est = dec.predict(w_est)
+w_test_all = [None] * len(x_test_all)
+w_est_all = [None] * len(x_test_all)
+x_est_all = [None] * len(x_test_all)
+w_est_err_all = [None] * len(x_test_all)
+x_est_err_all = [None] * len(x_test_all)
+for i in range(len(x_test_all)):
+    w_test_all[i] = enc.predict(x_test_all[i]/100)
+    [z_est, z_est_var] = kf.filter(w_test_all[i])
+    w_est_all[i] = np.matmul(z_est, C.T) + np.tile(d.reshape([1,-1]),[z_est.shape[0],1])
+    w_est_err_all[i] = np.linalg.norm(w_est_all[i] - w_test_all[i], axis=1)
+    x_est_all[i] = dec.predict(w_est_all[i])
+    x_est_err_all[i] = np.linalg.norm(x_est_all[i] - x_test_all[i]/100, axis=1)
+    
 
 
 ii = 90
