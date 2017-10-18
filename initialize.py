@@ -10,7 +10,9 @@ import matplotlib.pyplot as plt
 import h5py
 import os
 import Kalman_tools
-from Kalman_tools import expectation, maximization, EM_step
+from Kalman_tools import expectation, maximization, EM_step, E_log_P_x_and_z
+
+#np.random.seed(423)
 
 w_dim, z_dim, v_dim, x_dim, u_dim = 4, 4, 4, 2, 2
 intermediate_dim = 4

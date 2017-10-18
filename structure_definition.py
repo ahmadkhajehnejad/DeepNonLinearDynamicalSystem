@@ -28,6 +28,7 @@ _x_decoded_mean = decoder_mean(_h_decoded)
 dec = Model(decoder_input, _x_decoded_mean)
 
 AE = Model(x,[x_bar,w,w])
+#AE = Model(x,x_bar)
 
 act_map = Sequential()
 act_map.add(Dense(4, input_shape=(u_dim,), activation='relu'))

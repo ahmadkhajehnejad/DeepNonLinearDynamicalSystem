@@ -1,4 +1,5 @@
 exec(open('./initialize.py').read())
+
 exec(open('./structure_definition.py').read())
 
 def sqr_diff(X):
@@ -22,16 +23,20 @@ def AE_TRAIN(net_in, net_out, LDS_loss, lr, loss_weights, epochs):
               epochs= epochs,
               batch_size=batch_size,
               verbose=0)
-    return hist
+    return hist.history
 
 exec(open('read_data.py').read())
 
 IterNum_EM = 50
 IterNum_CoordAsc = 5
-batch_size = 100
+batch_size = 1000
+reg_error = []
 recons_error = []
 loglik = []
 E_log = []
+hist_0 = []
+hist_1 = []
+hist_2 = []
 
 exec(open('log_tools.py').read())
 
@@ -51,8 +56,10 @@ for iter_EM in range(IterNum_EM):
         [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
         Rinv = np.linalg.inv(R)
         Qinv = np.linalg.inv(Q)
-        #log_update_loglik_recons()
+        
         log_update_E_log()
+        log_update_loglik_recons_reg()
+        
 
     
     for iter_CoorAsc in range(IterNum_CoordAsc):
@@ -78,19 +85,19 @@ for iter_EM in range(IterNum_EM):
                                          )
         #if (iter_EM == 0) and (iter_CoorAsc == 0):
             #AE.load_weights('./cache_0_0_simpleAE_params.h5')
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
-                        LDS_loss = LDS_loss, lr=0.0005, loss_weights=[1., 1., 1.], epochs=100)
-        log_print_fit_hist(hist)
+        hist_0.append(AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
+                        LDS_loss = LDS_loss, lr=0.005, loss_weights=[1., .1, 0.], epochs=200))
+        hist_1.append(AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
+                        LDS_loss = LDS_loss, lr=0.000005, loss_weights=[1., .1, 1.], epochs=1000))
             #AE.save_weights('./cache_0_0_simpleAE_params.h5')
         
-        log_update_E_log()
+        #log_update_E_log()
         
-        hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
-                        LDS_loss = LDS_loss, lr=0.0005, loss_weights=[1., 1., 1.], epochs=100)
-        log_print_fit_hist(hist)
+        #hist = AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
+        #                LDS_loss = LDS_loss, lr=0.000005, loss_weights=[1., 0., 1.], epochs=100)
+        #log_print_fit_hist(hist)
         
-        log_update_E_log()
-        
+        #log_update_E_log()
         
         ##########  update act_map parameters #############################
         
@@ -107,18 +114,19 @@ for iter_EM in range(IterNum_EM):
             sh = K.shape(v)
             return -tf.matmul(tf.reshape(EztT_minus_Ezt_1TAT_bT_alltimes_QinvH, [sh[0],1,sh[1]]), tf.reshape(v,[sh[0],sh[1],1]))\
                         + 0.5 * tf.matmul(tf.reshape(tf.matmul(v, HTQinvH),[sh[0],1,sh[1]]), tf.reshape(v,[sh[0],sh[1],1]))
-        act_map_learning_rate = .0005
+        act_map_learning_rate = .00005
         act_map_adam = optimizers.Adam(lr=act_map_learning_rate, beta_1=0.1)
         act_map.compile(optimizer=act_map_adam, loss=act_map_loss)
         
         u_tr_len = u_train.shape[0]-np.mod(u_train.shape[0],batch_size)
-        hist = act_map.fit( u_train[:u_tr_len,:] , EztT_minus_Ezt_1TAT_bT_alltimes_QinvH[:u_tr_len,:],
+        tmp_hist = act_map.fit( u_train[:u_tr_len,:] , EztT_minus_Ezt_1TAT_bT_alltimes_QinvH[:u_tr_len,:],
                   shuffle=True,
-                  epochs= 100,
+                  epochs= 200,
                   batch_size=batch_size,
                   verbose=0)
-        # print(np.mean(hist.history['loss'][-10:]))
-        log_update_E_log()
+        hist_2.append(np.mean(tmp_hist.history['loss'][-10:]))
+        log_print_fit_hists()
+        #log_update_E_log()
         
         ############ update DLS parameters
         
@@ -127,13 +135,12 @@ for iter_EM in range(IterNum_EM):
         for i in range(len(u_all)):
             v_all[i] = act_map.predict(u_all[i])
         
-        #[A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
+        [A,b,H,C,d,Q,R,mu_0,Sig_0] = maximization(Ezt, EztztT, Ezt_1ztT, w_all, v_all, b, d)
         Rinv = np.linalg.inv(R)
         Qinv = np.linalg.inv(Q)
         
-        #log_update_E_log()
-        
-        #log_update_loglik_recons()
+        log_update_E_log()
+        log_update_loglik_recons_reg()
         log_save_weights(iter_EM, iter_CoorAsc)        
         
     log_save_weights(iter_EM, -1)        
