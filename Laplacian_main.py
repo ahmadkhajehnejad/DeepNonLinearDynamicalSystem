@@ -146,10 +146,51 @@ for iter_EM in range(IterNum_EM):
     log_save_weights(iter_EM, -1)        
 ##################### TEST
 
-#AE.load_weights('./tuned_params/2/0_AE_params.h5')
-#act_map.load_weights('./tuned_params/0/0_act_map_params.h5')
-#[A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/2/0LDS_params.pkl','rb'))
+##################################################
+iter_EM = 37
+iter_CoorAsc = 4
+AE.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
+act_map.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
+[A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'rb'))
 
+##########################
+
+v_test_all = [None] * len(u_test_all)
+w_test_all = [None] * len(x_test_all)
+w_est_all = [None] * len(x_test_all)
+x_est_all = [None] * len(x_test_all)
+w_est_err_all = [None] * len(x_test_all)
+x_est_err_all = [None] * len(x_test_all)
+
+for i in range(len(x_test_all)):
+    #print('i = ' + str(i))
+    w_test_all[i] = enc.predict(x_test_all[i])
+    v_test_all[i] = act_map.predict(u_test_all[i])
+    w_est_all[i] = [None] * 24
+    x_est_all[i] = [None] * 24
+    w_est_err_all[i] = [None] * 24
+    x_est_err_all[i] = [None] * 24
+    for j in range(24):
+        #print('    j = ' + str(j))
+        w_est_all[i][j] = KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w_test_all[i][:25,:],v_test_all[i][:25+j+1])
+        x_est_all[i][j] = dec.predict(w_est_all[i][j].reshape([j+1,-1]))
+        w_est_err_all[i][j] = np.linalg.norm(w_est_all[i][j] - w_test_all[i][25:25+j+1,:], axis=1)
+        x_est_err_all[i][j] = np.linalg.norm(x_est_all[i][j] - x_test_all[i][25:25+j+1,:], axis=1)
+    
+    #w_1_step_est[i] = [None]
+    #for j in range(2,49):
+    #    w_1_step_est[i][j] = KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w_test_all[i][:25,:],v_test_all[i][:25+j+1])
+
+plt.figure()
+plt.cla()
+for i in range(20):
+    plt.plot(w_est_err_all[i][23])
+    
+plt.figure()
+plt.cla()
+for i in range(20):
+    plt.plot(x_est_err_all[i][23])
+'''
 from pykalman import KalmanFilter
 
 kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
@@ -161,21 +202,9 @@ kf = KalmanFilter(initial_state_mean = mu_0.reshape([-1]),
                   observation_offsets = d.reshape([-1]),
                   observation_covariance = R)
 
-w_test_all = [None] * len(x_test_all)
-w_est_all = [None] * len(x_test_all)
-x_est_all = [None] * len(x_test_all)
-w_est_err_all = [None] * len(x_test_all)
-x_est_err_all = [None] * len(x_test_all)
-for i in range(len(x_test_all)):
-    w_test_all[i] = enc.predict(x_test_all[i]/100)
-    [z_est, z_est_var] = kf.filter(w_test_all[i])
-    w_est_all[i] = np.matmul(z_est, C.T) + np.tile(d.reshape([1,-1]),[z_est.shape[0],1])
-    w_est_err_all[i] = np.linalg.norm(w_est_all[i] - w_test_all[i], axis=1)
-    x_est_all[i] = dec.predict(w_est_all[i])
-    x_est_err_all[i] = np.linalg.norm(x_est_all[i] - x_test_all[i]/100, axis=1)
-    
+'''
 
-
+'''
 ii = 90
 plt.figure()
 plt.subplot(2,1,1)            
@@ -247,3 +276,22 @@ plt.scatter(w_gr[:,0], w_gr[:, 1], c= np.arange(1296),linewidth = 0)
        
 #plt.figure(figsize=(6, 6))
 #plt.scatter(s_gr[:,0], s_gr[:, 1], c= np.arange(1296),linewidth = 0)
+'''
+
+
+
+#######################
+'''
+for iter_EM in range(IterNum_EM):
+    for iter_CoorAsc in range(IterNum_CoordAsc):
+        AE.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
+        act_map.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
+        [A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'rb'))
+    
+        for i in range(len(x_all)):
+            w_all[i] = enc.predict(x_all[i])
+        for i in range(len(u_all)):
+            v_all[i] = act_map.predict(u_all[i])
+    
+        log_update_loglik_recons_reg()
+'''

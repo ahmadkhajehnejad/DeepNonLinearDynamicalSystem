@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import h5py
 import os
 import Kalman_tools
-from Kalman_tools import expectation, maximization, EM_step, E_log_P_x_and_z
+from Kalman_tools import expectation, maximization, EM_step, E_log_P_x_and_z, KF_predict
 
 #np.random.seed(423)
 
