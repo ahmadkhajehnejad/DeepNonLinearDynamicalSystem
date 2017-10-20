@@ -8,7 +8,7 @@ def sqr_diff(X):
 
 kernel_sigma_2 = 1
 def AE_reg_loss(x_true,w):
-    return K.mean(K.exp(-sqr_diff(x_true)/kernel_sigma_2) * sqr_diff(w), axis=-1)
+    return K.mean(K.exp(-sqr_diff(x_true)/kernel_sigma_2) * sqr_diff(w), axis=-1) / K.mean(K.sum(K.square(w),axis=1))
 
 def AE_recons_loss(x_true, x_bar):
     recon = x_dim * keras.losses.mean_squared_error(x_true, x_bar) #keras.metrics.binary_crossentropy(x_true, x_bar)# might be better to be changed to binary_cross_entropy
@@ -27,7 +27,7 @@ def AE_TRAIN(net_in, net_out, LDS_loss, lr, loss_weights, epochs):
 
 exec(open('read_data.py').read())
 
-IterNum_EM = 20
+IterNum_EM = 5
 IterNum_CoordAsc = 5
 batch_size = 1000
 reg_error = []
@@ -148,11 +148,17 @@ for iter_EM in range(IterNum_EM):
 
 ##################################################
 '''
-iter_EM = 37
+iter_EM = 19
 iter_CoorAsc = 4
 AE.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
 act_map.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
 [A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'rb'))
+Rinv = np.linalg.inv(R)
+Qinv = np.linalg.inv(Q)
+[loglik,recons_error] = pickle.load(open('./results.pkl','rb'))
+reg_error = pickle.load(open('./reg_error.pkl', 'rb'))
+E_log = pickle.load(open('./E_log.pkl', 'rb'))
+[hist_0,hist_1,hist_2] = pickle.load(open('./fit_hists.pkl', 'rb'))
 '''
 ##########################
 
