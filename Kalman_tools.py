@@ -270,7 +270,7 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
             '''
             K = np.matmul(\
                           np.matmul(Sig_t_t_1[t], C.T) , \
-                          np.linalg.pinv(\
+                          np.linalg.inv(\
                                         np.matmul(\
                                                   C,
                                                   np.matmul(Sig_t_t_1[t], C.T)\
@@ -291,9 +291,54 @@ def log_likelihood(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
                                 w_all[i][t,:].reshape([-1,1]) - mu_xt_x1tot_1)
             #L = L + multivariate_normal.logpdf(w_all[i][t,:],mean=mu_xt_x1tot_1.reshape([-1]),cov=Sig_xt_x1tot_1)
         
-    return L[0]
+    return L[0][0]
 
+def E_log_P_x_and_z(Ezt, EztztT, Ezt_1ztT, w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0): ## Expectations have been computed with \theta^{old}
+    E = 0
+    M = len(Ezt)
+    T = Ezt[0].shape[1]
+    Sig_0_inv = np.linalg.inv(Sig_0)
+    Q_inv = np.linalg.inv(Q)
+    R_inv = np.linalg.inv(R)
+    for m in range(M):
+        E = E - 0.5 * np.log(2 * np.pi * np.linalg.det(Sig_0))
+        E = E - 0.5 * np.trace(np.matmul(EztztT[m][0], Sig_0_inv))
+        E = E + np.matmul(np.matmul(mu_0.T, Sig_0_inv).reshape([1,-1]), Ezt[m][:,0].reshape([-1,1]))
+        E = E - 0.5 * np.matmul(np.matmul(mu_0.T, Sig_0_inv).reshape([1,-1]), mu_0)
+        for t in range(1,T):
+            E = E - 0.5 * np.log(2 * np.pi * np.linalg.det(Q))
+            E = E - 0.5 * np.trace(np.matmul(EztztT[m][t],Q_inv))
+            E = E + np.trace(np.matmul(np.matmul(A,Ezt_1ztT[m][t]),Q_inv))
+            Hv_t_1_plus_b = np.matmul(H,v_all[m][t-1,:].reshape([-1,1])).reshape([-1,1])+b
+            E = E + np.matmul(Hv_t_1_plus_b.T,np.matmul(Q_inv,Ezt[m][:,t].reshape([-1,1])).reshape([-1,1]))
+            E = E - 0.5 * np.trace(np.matmul(np.matmul(EztztT[m][t-1],A.T),np.matmul(Q_inv,A)))
+            E = E - np.matmul(np.matmul((Hv_t_1_plus_b).T,Q_inv),np.matmul(A,Ezt[m][:,t-1].reshape([-1,1])))
+            E = E - 0.5 * np.matmul(np.matmul(Hv_t_1_plus_b.T,Q_inv).reshape([1,-1]), Hv_t_1_plus_b)
+        for t in range(T):
+            E = E - 0.5 * np.log(2 * np.pi * np.linalg.det(R))
+            w_minus_d = w_all[m][t,:].reshape([-1,1]) - d
+            E = E - 0.5 * np.matmul(np.matmul(w_minus_d.T,R_inv).reshape([1,-1]), w_minus_d)
+            E = E - 0.5 * np.trace(np.matmul(np.matmul(EztztT[m][t],C.T),np.matmul(R_inv,C)))
+            E = E + np.matmul(np.matmul(w_minus_d.T,R_inv).reshape([1,-1]), np.matmul(C,Ezt[m][:,t].reshape([-1,1])).reshape([-1,1]))
+    return E[0][0]
 
+def KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w,v):
+    z_dim = mu_0.shape[0]
+    w_dim = w.shape[1]
+    w_all = [w]
+    v_all = [v[:w.shape[0]]]
+    [Ezt, _, _] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
+    mu_z = np.zeros([v.shape[0]-w.shape[0], z_dim])
+    est = np.zeros([v.shape[0]-w.shape[0], w_dim])
+    k = 0
+    for i in range(w.shape[0],v.shape[0]):
+        if k == 0:
+            mu_z[k,:] = np.matmul(Ezt[0][:,-1].reshape([1,-1]),A.T) + b.reshape([-1])
+        else:
+            mu_z[k,:] = np.matmul(mu_z[k-1,:].reshape([1,-1]),A.T) + b.reshape([-1])
+        est[k] = np.matmul(mu_z[k,:].reshape([1,-1]),C.T) + d.T
+        k = k+1
+    return est
 
 def test_Kalman_tools():
     
