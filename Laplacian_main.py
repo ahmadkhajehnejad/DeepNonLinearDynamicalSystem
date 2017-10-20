@@ -27,7 +27,7 @@ def AE_TRAIN(net_in, net_out, LDS_loss, lr, loss_weights, epochs):
 
 exec(open('read_data.py').read())
 
-IterNum_EM = 50
+IterNum_EM = 20
 IterNum_CoordAsc = 5
 batch_size = 1000
 reg_error = []
@@ -86,9 +86,9 @@ for iter_EM in range(IterNum_EM):
         #if (iter_EM == 0) and (iter_CoorAsc == 0):
             #AE.load_weights('./cache_0_0_simpleAE_params.h5')
         hist_0.append(AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
-                        LDS_loss = LDS_loss, lr=0.005, loss_weights=[1., .1, 0.], epochs=200))
+                        LDS_loss = LDS_loss, lr=0.005, loss_weights=[1., 1., 0.], epochs=200))
         hist_1.append(AE_TRAIN(net_in=x_train, net_out=[x_train, x_train, EzT_CT_Rinv_plus_dT_Rinv], \
-                        LDS_loss = LDS_loss, lr=0.000005, loss_weights=[1., .1, 1.], epochs=1000))
+                        LDS_loss = LDS_loss, lr=0.000005, loss_weights=[1., 1., 1.], epochs=1000))
             #AE.save_weights('./cache_0_0_simpleAE_params.h5')
         
         #log_update_E_log()
@@ -147,12 +147,13 @@ for iter_EM in range(IterNum_EM):
 ##################### TEST
 
 ##################################################
+'''
 iter_EM = 37
 iter_CoorAsc = 4
 AE.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_AE_params.h5')
 act_map.load_weights('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + '_act_map_params.h5')
 [A,b,H,C,d,Q,R,mu_0,Sig_0] = pickle.load(open('./tuned_params/' + str(iter_EM) + '/' + str(iter_CoorAsc) + 'LDS_params.pkl', 'rb'))
-
+'''
 ##########################
 
 v_test_all = [None] * len(u_test_all)
@@ -166,13 +167,13 @@ for i in range(len(x_test_all)):
     #print('i = ' + str(i))
     w_test_all[i] = enc.predict(x_test_all[i])
     v_test_all[i] = act_map.predict(u_test_all[i])
-    w_est_all[i] = [None] * 24
-    x_est_all[i] = [None] * 24
-    w_est_err_all[i] = [None] * 24
-    x_est_err_all[i] = [None] * 24
-    for j in range(24):
+    w_est_all[i] = [None] * 25
+    x_est_all[i] = [None] * 25
+    w_est_err_all[i] = [None] * 25
+    x_est_err_all[i] = [None] * 25
+    for j in range(25):
         #print('    j = ' + str(j))
-        w_est_all[i][j] = KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w_test_all[i][:25,:],v_test_all[i][:25+j+1])
+        w_est_all[i][j] = KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w_test_all[i][:25,:],v_test_all[i][:25+j])
         x_est_all[i][j] = dec.predict(w_est_all[i][j].reshape([j+1,-1]))
         w_est_err_all[i][j] = np.linalg.norm(w_est_all[i][j] - w_test_all[i][25:25+j+1,:], axis=1)
         x_est_err_all[i][j] = np.linalg.norm(x_est_all[i][j] - x_test_all[i][25:25+j+1,:], axis=1)
@@ -184,12 +185,12 @@ for i in range(len(x_test_all)):
 plt.figure()
 plt.cla()
 for i in range(20):
-    plt.plot(w_est_err_all[i][23])
+    plt.plot(w_est_err_all[i][24])
     
 plt.figure()
 plt.cla()
 for i in range(20):
-    plt.plot(x_est_err_all[i][23])
+    plt.plot(x_est_err_all[i][24])
 '''
 from pykalman import KalmanFilter
 

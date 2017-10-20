@@ -30,13 +30,13 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
         
         mu_t_t = [None] * T
         Sig_t_t = [None] * T
-        mu_t_t_1 = [None] * T
         Sig_t_t_1 = [None] * T
         mu_t_T = [None] * T
         Sig_t_T = [None] * T
         
         for t in range(T):
             if t > 0:
+        mu_t_t_1 = [None] * T
                 mu_t_t_1[t] = np.matmul(A,mu_t_t[t-1]) + np.matmul(H,v_all[i][t-1,:].reshape([-1,1])) + b
                 Sig_t_t_1[t] = np.matmul(A, np.matmul(Sig_t_t[t-1],A.T)) + Q
             else:
@@ -328,14 +328,14 @@ def KF_predict(A,b,H,C,d,Q,R,mu_0,Sig_0,w,v):
     w_all = [w]
     v_all = [v[:w.shape[0]]]
     [Ezt, _, _] = expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0)
-    mu_z = np.zeros([v.shape[0]-w.shape[0], z_dim])
-    est = np.zeros([v.shape[0]-w.shape[0], w_dim])
+    mu_z = np.zeros([v.shape[0]-w.shape[0]+1, z_dim])
+    est = np.zeros([v.shape[0]-w.shape[0]+1, w_dim])
     k = 0
-    for i in range(w.shape[0],v.shape[0]):
+    for i in range(w.shape[0],v.shape[0]+1):
         if k == 0:
-            mu_z[k,:] = np.matmul(Ezt[0][:,-1].reshape([1,-1]),A.T) + b.reshape([-1])
+            mu_z[k,:] = np.matmul(Ezt[0][:,-1].reshape([1,-1]),A.T) + np.matmul(v[i-1,:].reshape([1,-1]),H.T) + b.reshape([-1])
         else:
-            mu_z[k,:] = np.matmul(mu_z[k-1,:].reshape([1,-1]),A.T) + b.reshape([-1])
+            mu_z[k,:] = np.matmul(mu_z[k-1,:].reshape([1,-1]),A.T) + np.matmul(v[i-1,:].reshape([1,-1]),H.T) + b.reshape([-1])
         est[k] = np.matmul(mu_z[k,:].reshape([1,-1]),C.T) + d.T
         k = k+1
     return est
