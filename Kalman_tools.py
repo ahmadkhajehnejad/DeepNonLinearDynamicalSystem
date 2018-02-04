@@ -30,13 +30,13 @@ def expectation(w_all,A,b,H,v_all,C,d,Q,R,mu_0,Sig_0):
         
         mu_t_t = [None] * T
         Sig_t_t = [None] * T
+        mu_t_t_1 = [None] * T
         Sig_t_t_1 = [None] * T
         mu_t_T = [None] * T
         Sig_t_T = [None] * T
         
         for t in range(T):
             if t > 0:
-        mu_t_t_1 = [None] * T
                 mu_t_t_1[t] = np.matmul(A,mu_t_t[t-1]) + np.matmul(H,v_all[i][t-1,:].reshape([-1,1])) + b
                 Sig_t_t_1[t] = np.matmul(A, np.matmul(Sig_t_t[t-1],A.T)) + Q
             else:

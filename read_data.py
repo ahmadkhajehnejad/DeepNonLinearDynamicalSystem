@@ -1,5 +1,5 @@
 print('data load start')
-[tmp_X, tmp_U, tmp_S] = pickle.load(open('moving_particle_trajectory_train', 'rb'))
+[tmp_X, tmp_U, tmp_S] = pickle.load(open('moving_particle_trajectory_train.pkl', 'rb'))
 print('data load finish')
 
 x_all = [None] * len(tmp_X)
@@ -22,7 +22,7 @@ for i in range(len(x_all)):
 print('train data is ready.')
 
 print('data load start')
-[tmp_X, tmp_U, _] = pickle.load(open('moving_particle_trajectory_test', 'rb'))
+[tmp_X, tmp_U, _] = pickle.load(open('moving_particle_trajectory_test.pkl', 'rb'))
 print('data load finish')
 
 x_test_all = [None] * len(tmp_X)
